@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对外汉语学习平台 - 多学生版</title>
+<style>
+:root{--bg:#f3f9ff;--card:#fff;--accent:#3b82f6;--muted:#374151;--danger:#ef4444;}
+body{font-family:"Microsoft YaHei",Arial,sans-serif;background:var(--bg);margin:0;padding:20px;color:#111;}
+.wrap{max-width:1100px;margin:0 auto;}
+.card{background:var(--card);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,.06);}
+h1,h2{margin:0 0 10px;}
+.muted{color:var(--muted);font-size:13px;}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.hidden{display:none;}
+.options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px;}
+.opt{padding:12px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#000;cursor:pointer;min-width:80px;}
+.opt.correct{background:#d1fae5;border-color:#10b981;}
+.opt.wrong{background:#fee2e2;border-color:#ef4444;}
+.word-big{font-size:36px;margin:10px 0;}
+input,select,button{font-size:14px;padding:10px;border-radius:8px;border:1px solid #d1d5db;color:#000;}
+button{cursor:pointer;background:var(--accent);color:#fff;border:none;}
+.btn-danger{background:var(--danger);}
+.table{width:100%;border-collapse:collapse;margin-top:10px;}
+.table th,.table td{padding:8px;border:1px solid #d1d5db;text-align:left;}
+.level-badge{display:inline-block;padding:4px 8px;background:#eef2ff;border-radius:6px;margin-right:6px;}
+.flex{display:flex;gap:12px;align-items:center;}
+.search{margin-bottom:8px;}
+.small{font-size:13px;color:var(--muted);}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.btn-plain{background:#e5e7eb;color:#000;}
+.selected{outline:2px solid #3b82f6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 登录卡 -->
+  <div class="card" id="loginCard">
+    <h1>对外汉语学习平台</h1>
+    <div class="row">
+      <div style="flex:1">
+        <label>姓名</label><br>
+        <input id="studentName" placeholder="例如：Kota">
+      </div>
+      <div style="width:120px">
+        <label>年级</label><br>
+        <select id="gradeSelect">
+          <option value="6">6年级</option>
+          <option value="7">7年级</option>
+          <option value="8">8年级</option>
+          <option value="9">9年级</option>
+        </select>
+      </div>
+      <div style="width:160px;margin-top:18px">
+        <button id="loginBtn">登入</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>角色</label><br>
+      <select id="roleSelect">
+        <option value="student">学生</option>
+        <option value="teacher">教师</option>
+      </select>
+    </div>
+    <div id="teacherPasswordDiv" class="hidden" style="margin-top:10px">
+      <label>教师密码：</label>
+      <input id="teacherPassword" type="password" placeholder="请输入教师密码">
+    </div>
+    <p class="small" style="margin-top:8px">教师模式可查看学生成绩（按年级 + 关卡筛选）。</p>
+  </div>
+
+  <!-- 主界面 -->
+  <div class="card hidden" id="mainCard">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <strong id="welcome"></strong> (<span id="roleTag"></span>)
+        <span id="studentGrade" class="small"></span>
+      </div>
+      <div class="toolbar">
+        <button id="logoutBtn" class="btn-danger">登出</button>
+      </div>
+    </div>
+
+    <!-- 学生控制 -->
+    <div class="row" style="margin-top:12px" id="studentControls">
+      <label>题型：</label>
+      <select id="gameType">
+        <option value="mc">看词选义</option>
+        <option value="typing">拼写/输入</option>
+        <option value="listen">听写</option>
+        <option value="match">配对</option>
+        <option value="pair">连连看</option>
+      </select>
+      <label>关卡：</label>
+      <select id="levelSelect"></select>
+      <button id="startGameBtn">开始闯关</button>
+    </div>
+
+    <!-- 游戏区域 -->
+    <div id="gameArea" style="margin-top:12px"></div>
+    <div id="resultArea" class="hidden">
+      <h3>本次得分：<span id="sessionScore"></span></h3>
+      <div class="row">
+        <button id="retryBtn">重玩本关</button>
+        <button id="saveAndExitBtn" class="btn-plain">保存并退出</button>
+      </div>
+    </div>
+
+    <!-- 教师后台 -->
+    <div id="teacherArea" class="hidden" style="margin-top:12px">
+      <h2>教师后台</h2>
+      <div class="row">
+        <label>筛选年级：</label>
+        <select id="filterGrade">
+          <option value="">全部</option>
+          <option value="6">6年级</option>
+          <option value="7">7年级</option>
+          <option value="8">8年级</option>
+          <option value="9">9年级</option>
+        </select>
+        <label>筛选关卡：</label>
+        <select id="filterLevel"><option value="">全部</option></select>
+        <label>搜索：</label>
+        <input id="filterName" placeholder="姓名">
+        <button id="refreshScores" class="btn-plain">刷新成绩</button>
+        <button id="exportCsv" class="btn-plain">导出 CSV</button>
+        <button id="clearAll" class="btn-danger">清空所有成绩</button>
+      </div>
+      <table class="table" id="scoreTable">
+        <thead><tr><th>姓名</th><th>年级</th><th>关卡</th><th>题型</th><th>分数</th><th>时间</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// -------------------
+// 教师密码
+// -------------------
+const TEACHER_PASSWORD = "NK0811";
+
+// -------------------
+// 示例关卡数据
+// -------------------
+const LEVELS = [
+  { name: 'PART1: 家人', words:[
+    {ch:'爸爸',pin:'bàba',en:'father'},
+    {ch:'妈妈',pin:'māma',en:'mother'},
+    {ch:'哥哥',pin:'gēge',en:'older brother'},
+    {ch:'姐姐',pin:'jiějie',en:'older sister'},
+    {ch:'弟弟',pin:'dìdi',en:'younger brother'},
+    {ch:'妹妹',pin:'mèimei',en:'younger sister'}
+  ]},
+  { name: 'PART2: 亲戚', words:[
+    {ch:'爷爷',pin:'yéye',en:'grandfather'},
+    {ch:'奶奶',pin:'nǎinai',en:'grandmother'},
+    {ch:'叔叔',pin:'shūshu',en:'uncle'},
+    {ch:'姑姑',pin:'gūgu',en:'aunt'}
+  ]}
+];
+
+// -------------------
+// 全局变量
+// -------------------
+let currentUser = null;
+let currentSession = null;
+
+// DOM
+const loginCard=document.getElementById("loginCard");
+const mainCard=document.getElementById("mainCard");
+const studentNameEl=document.getElementById("studentName");
+const gradeSelect=document.getElementById("gradeSelect");
+const roleSelect=document.getElementById("roleSelect");
+const teacherPasswordDiv=document.getElementById("teacherPasswordDiv");
+const teacherPasswordInput=document.getElementById("teacherPassword");
+const loginBtn=document.getElementById("loginBtn");
+const welcomeEl=document.getElementById("welcome");
+const roleTag=document.getElementById("roleTag");
+const studentGradeSpan=document.getElementById("studentGrade");
+const studentControls=document.getElementById("studentControls");
+const levelSelectEl=document.getElementById("levelSelect");
+const gameTypeEl=document.getElementById("gameType");
+const teacherArea=document.getElementById("teacherArea");
+const startGameBtn=document.getElementById("startGameBtn");
+const gameArea=document.getElementById("gameArea");
+const resultArea=document.getElementById("resultArea");
+const sessionScoreEl=document.getElementById("sessionScore");
+const retryBtn=document.getElementById("retryBtn");
+const saveAndExitBtn=document.getElementById("saveAndExitBtn");
+const logoutBtn=document.getElementById("logoutBtn");
+const filterGrade=document.getElementById("filterGrade");
+const filterLevel=document.getElementById("filterLevel");
+const filterName=document.getElementById("filterName");
+const refreshScoresBtn=document.getElementById("refreshScores");
+const exportCsvBtn=document.getElementById("exportCsv");
+const clearAllBtn=document.getElementById("clearAll");
+const scoreTableBody=document.querySelector("#scoreTable tbody");
+
+// -------------------
+// 工具函数
+// -------------------
+function shuffle(arr){return arr.sort(()=>Math.random()-0.5);}
+function speak(text){try{const u=new SpeechSynthesisUtterance(text);u.lang="zh-CN";window.speechSynthesis.speak(u);}catch(e){}}
+function playSound(correct){const audio=new Audio(correct?"correct.mp3":"wrong.mp3");audio.play();}
+function saveScore(scoreObj){
+  let data=JSON.parse(localStorage.getItem("scores")||"[]");
+  data.push(scoreObj);
+  localStorage.setItem("scores",JSON.stringify(data));
+}
+function loadScores(){return JSON.parse(localStorage.getItem("scores")||"[]");}
+function formatTime(){return (new Date()).toLocaleString();}
+
+// -------------------
+// 初始化关卡
+// -------------------
+function initLevels(){
+  levelSelectEl.innerHTML="";
+  filterLevel.innerHTML='<option value="">全部</option>';
+  LEVELS.forEach((lvl,i)=>{
+    const o1=document.createElement("option");o1.value=i;o1.textContent=lvl.name;levelSelectEl.appendChild(o1);
+    const o2=document.createElement("option");o2.value=i;o2.textContent=lvl.name;filterLevel.appendChild(o2);
+  });
+}
+initLevels();
+
+// -------------------
+// 登录逻辑
+// -------------------
+roleSelect.onchange=()=>teacherPasswordDiv.classList.toggle("hidden",roleSelect.value!=="teacher");
+
+loginBtn.onclick=()=>{
+  const name=studentNameEl.value.trim();
+  const grade=gradeSelect.value;
+  const role=roleSelect.value;
+  if(role==="teacher"){
+    const pwd=teacherPasswordInput.value.trim();
+    if(!pwd){alert("请输入教师密码");return;}
+    if(pwd!==TEACHER_PASSWORD){alert("教师密码错误");return;}
+    currentUser={name:"教师",role:"teacher"};
+    enterTeacherMode();return;
+  }
+  if(!name){alert("请输入姓名");return;}
+  currentUser={name,role:"student",grade};
+  enterStudentMode();
+};
+
+function enterTeacherMode(){
+  loginCard.classList.add("hidden");
+  mainCard.classList.remove("hidden");
+  welcomeEl.textContent=currentUser.name;
+  roleTag.textContent="教师";
+  studentGradeSpan.textContent="";
+  studentControls.classList.add("hidden");
+  teacherArea.classList.remove("hidden");
+  refreshScores();
+}
+
+function enterStudentMode(){
+  loginCard.classList.add("hidden");
+  mainCard.classList.remove("hidden");
+  welcomeEl.textContent=currentUser.name;
+  roleTag.textContent="学生";
+  studentGradeSpan.textContent=`(${currentUser.grade}年级)`;
+  teacherArea.classList.add("hidden");
+  studentControls.classList.remove("hidden");
+}
+
+// 登出
+logoutBtn.onclick=()=>location.reload();
+
+// -------------------
+// 开始游戏
+// -------------------
+startGameBtn.onclick=()=>{
+  if(!currentUser){alert("请先登入");return;}
+  const lvlIndex=parseInt(levelSelectEl.value);
+  const gameType=gameTypeEl.value;
+  startSession(lvlIndex,gameType);
+};
+
+function startSession(levelIndex,gameType){
+  const lvl=LEVELS[levelIndex];
+  const words=shuffle([...lvl.words]);
+  currentSession={
+    levelIndex,
+    levelName:lvl.name,
+    gameType,
+    words:words.slice(0,Math.min(6,words.length)),
+    score:0,
+    total:Math.min(6,words.length),
+    timestamp:formatTime()
+  };
+  renderGame();
+}
+
+// -------------------
+// 渲染游戏
+// -------------------
+function renderGame(){
+  gameArea.innerHTML="";
+  resultArea.classList.add("hidden");
+  const g=currentSession.gameType;
+  const words=currentSession.words;
+  if(g==='mc') renderMC(words);
+  else if(g==='typing') renderTyping(words);
+  else if(g==='listen') renderListen(words);
+  else if(g==='match') renderPairLike(words,"配对");
+  else if(g==='pair') renderPairLike(words,"连连看");
+}
+
+// -------------------
+// 看词选义
+// -------------------
+function renderMC(words){
+  words.forEach((w,i)=>{
+    const div=document.createElement("div");
+    div.innerHTML=`<span class="word-big">${w.ch}</span>`;
+    const opts=shuffle([w.en,...words.filter((_,idx)=>idx!==i).map(x=>x.en)]);
+    const optsDiv=document.createElement("div");optsDiv.className="options";
+    opts.forEach(o=>{
+      const btn=document.createElement("div");btn.className="opt";btn.textContent=o;
+      btn.onclick=()=>{
+        if(btn.dataset.done) return;
+        btn.dataset.done=true;
+        if(o===w.en){btn.classList.add("correct");currentSession.score++;playSound(true);}
+        else{btn.classList.add("wrong");playSound(false);}
+        checkFinish();
+      };
+      optsDiv.appendChild(btn);
+    });
+    div.appendChild(optsDiv);
+    gameArea.appendChild(div);
+    speak(w.ch);
+  });
+}
+
+// -------------------
+// 拼写/输入
+// -------------------
+function renderTyping(words){
+  words.forEach(w=>{
+    const div=document.createElement("div");
+    div.innerHTML=`<span class="word-big">${w.ch}</span>`;
+    const input=document.createElement("input");input.placeholder="输入拼音";
+    input.onchange=()=>{
+      if(input.dataset.done) return;
+      input.dataset.done=true;
+      if(input.value.trim().toLowerCase()===w.pin.toLowerCase()){
+        input.style.background="#d1fae5";currentSession.score++;playSound(true);
+      }else{input.style.background="#fee2e2";playSound(false);}
+      checkFinish();
+    };
+    div.appendChild(input);
+    gameArea.appendChild(div);
+    speak(w.ch);
+  });
+}
+
+// -------------------
+// 听写
+// -------------------
+function renderListen(words){
+  words.forEach(w=>{
+    const div=document.createElement("div");
+    div.innerHTML=`<span class="word-big">听写拼音</span>`;
+    const input=document.createElement("input");input.placeholder="输入拼音";
+    input.onfocus=()=>speak(w.ch);
+    input.onchange=()=>{
+      if(input.dataset.done) return;
+      input.dataset.done=true;
+      if(input.value.trim().toLowerCase()===w.pin.toLowerCase()){
+        input.style.background="#d1fae5";currentSession.score++;playSound(true);
+      }else{input.style.background="#fee2e2";playSound(false);}
+      checkFinish();
+    };
+    div.appendChild(input);
+    gameArea.appendChild(div);
+  });
+}
+
+// -------------------
+// 配对 / 连连看
+// -------------------
+function renderPairLike(words,type){
+  const left=shuffle([...words]);
+  const right=shuffle([...words]);
+  const container=document.createElement("div");container.className="row";
+  const leftDiv=document.createElement("div");leftDiv.style.flex="1";
+  const rightDiv=document.createElement("div");rightDiv.style.flex="1";
+  left.forEach(w=>{
+    const btn=document.createElement("div");btn.className="opt";btn.textContent=w.ch;
+    btn.dataset.key=w.ch;btn.onclick=()=>selectPair(btn,1);leftDiv.appendChild(btn);
+  });
+  right.forEach(w=>{
+    const btn=document.createElement("div");btn.className="opt";btn.textContent=w.en;
+    btn.dataset.key=w.ch;btn.onclick=()=>selectPair(btn,2);rightDiv.appendChild(btn);
+  });
+  container.appendChild(leftDiv);container.appendChild(rightDiv);
+  gameArea.appendChild(container);
+
+  let first=null;
+  function selectPair(btn,side){
+    if(btn.dataset.done) return;
+    if(!first){first={btn,side};btn.classList.add("selected");return;}
+    if(first.btn===btn) return;
+    if(first.btn.dataset.key===btn.dataset.key){
+      first.btn.classList.add("correct");btn.classList.add("correct");
+      first.btn.dataset.done=true;btn.dataset.done=true;
+      currentSession.score++;playSound(true);
+    }else{
+      first.btn.classList.add("wrong");btn.classList.add("wrong");playSound(false);
+      setTimeout(()=>{first.btn.classList.remove("wrong","selected");btn.classList.remove("wrong");},500);
+    }
+    first=null;
+    checkFinish();
+  }
+}
+
+// -------------------
+// 检查是否完成
+// -------------------
+function checkFinish(){
+  const total=currentSession.total;
+  const done=document.querySelectorAll("#gameArea .correct,#gameArea input[data-done]").length;
+  if(done>=total){
+    finishAndSave();
+  }
+}
+
+// -------------------
+// 完成关卡 & 保存成绩
+// -------------------
+function finishAndSave(){
+  gameArea.innerHTML="";
+  resultArea.classList.remove("hidden");
+  sessionScoreEl.textContent=currentSession.score+"/"+currentSession.total;
+}
+
+retryBtn.onclick=()=>{renderGame();};
+saveAndExitBtn.onclick=()=>{
+  if(currentUser.role==="student"){
+    saveScore({
+      name: currentUser.name,
+      grade: currentUser.grade,
+      level: currentSession.levelName,
+      gameType: currentSession.gameType,
+      score: currentSession.score,
+      total: currentSession.total,
+      time: currentSession.timestamp
+    });
+  }
+  resultArea.classList.add("hidden");gameArea.innerHTML="";
+};
+
+// -------------------
+// 教师后台功能
+// -------------------
+refreshScoresBtn.onclick=refreshScores;
+exportCsvBtn.onclick=exportCSV;
+clearAllBtn.onclick=clearAllScores;
+
+function refreshScores(){
+  const data=loadScores();
+  const gradeFilter=filterGrade.value;
+  const levelFilter=filterLevel.value;
+  const nameFilter=filterName.value.toLowerCase();
+  scoreTableBody.innerHTML="";
+  data.forEach(d=>{
+    if(gradeFilter && d.grade!==gradeFilter) return;
+    if(levelFilter && d.level!==LEVELS[levelFilter].name) return;
+    if(nameFilter && !d.name.toLowerCase().includes(nameFilter)) return;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${d.name}</td><td>${d.grade}</td><td>${d.level}</td><td>${d.gameType}</td><td>${d.score}/${d.total}</td><td>${d.time}</td>`;
+    scoreTableBody.appendChild(tr);
+  });
+}
+
+function exportCSV(){
+  const data=loadScores();
+  let csv="姓名,年级,关卡,题型,分数,时间\n";
+  data.forEach(d=>{csv+=`${d.name},${d.grade},${d.level},${d.gameType},${d.score}/${d.total},${d.time}\n`;});
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="scores.csv";a.click();
+}
+
+function clearAllScores(){
+  if(confirm("确定清空所有成绩吗？")){localStorage.removeItem("scores");refreshScores();}
+}
+</script>
+</body>
+</html>
