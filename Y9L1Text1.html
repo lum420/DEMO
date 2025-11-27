@@ -120,6 +120,7 @@ button{cursor:pointer;background:var(--accent);color:#fff;border:none}
           <button id="deleteStudentScoresBtn" class="btn-danger">删除该学生成绩</button>
         </div>
       </div>
+
       <div id="studentScoresTable" style="margin-top:12px"></div>
     </div>
   </div>
@@ -128,9 +129,10 @@ button{cursor:pointer;background:var(--accent);color:#fff;border:none}
 <script>
 const EXERCISE_NAME = location.pathname.split('/').pop().replace('.html','') || 'L1Text2';
 const TEACHER_PASSWORD = 'NK0811';
-const correctSound = new Audio('correct.mp3');
-const wrongSound = new Audio('wrong.mp3');
+const correctSound = new Audio('correct.mp3'); // 保留你已有MP3文件
+const wrongSound = new Audio('wrong.mp3');     // 保留你已有MP3文件
 
+// 关卡示例，可扩展
 const LEVELS = [
   { name: 'PART1: 家人', words:[
     {ch:'爸爸',pin:'bàba',en:'father'},
@@ -148,12 +150,12 @@ const LEVELS = [
   ]}
 ];
 
-let scores = JSON.parse(localStorage.getItem('cf_scores_'+EXERCISE_NAME) || '[]');
-let progress = JSON.parse(localStorage.getItem('cf_progress_'+EXERCISE_NAME) || '{}');
+let scores = JSON.parse(localStorage.getItem('cf_scores') || '[]');
+let progress = JSON.parse(localStorage.getItem('cf_progress') || '{}');
 let currentUser = null;
 let currentSession = null;
 
-/* DOM */
+/* DOM Elements */
 const loginCard = document.getElementById('loginCard');
 const mainCard = document.getElementById('mainCard');
 const teacherCard = document.getElementById('teacherCard');
@@ -188,7 +190,7 @@ const studentScoresTable = document.getElementById('studentScoresTable');
 const exportOneCsvBtn = document.getElementById('exportOneCsvBtn');
 const deleteStudentScoresBtn = document.getElementById('deleteStudentScoresBtn');
 
-/* 初始化关卡 */
+/* 初始化关卡下拉 */
 function initLevels(){
   levelSelectEl.innerHTML = '';
   LEVELS.forEach((l,i)=>{
@@ -200,7 +202,7 @@ function initLevels(){
 }
 initLevels();
 
-/* 登录 */
+/* 登录逻辑 */
 roleSelect.onchange = ()=> teacherPasswordDiv.classList.toggle('hidden', roleSelect.value !== 'teacher');
 
 loginBtn.onclick = ()=>{
@@ -229,10 +231,21 @@ loginBtn.onclick = ()=>{
 
 logoutBtn.onclick = ()=> location.reload();
 
-/* 教师后台 */
-teacherModeBtn.onclick = ()=>{ teacherCard.classList.toggle('hidden'); if(!teacherCard.classList.contains('hidden')) showTeacherOverview(); };
+/* 教师模式切换 */
+teacherModeBtn.onclick = ()=>{
+  teacherCard.classList.toggle('hidden');
+  if(!teacherCard.classList.contains('hidden')) showTeacherOverview();
+};
+
+function showTeacherOverview(){
+  teacherOverview.classList.remove('hidden');
+  teacherStudentDetail.classList.add('hidden');
+  renderStudentsOverview();
+}
+
 backToOverview.onclick = ()=> showTeacherOverview();
 
+/* 学生列表 */
 function getAllStudentsFromScores(){
   const set = new Set();
   scores.forEach(s=> set.add(s.student));
@@ -242,31 +255,30 @@ function getAllStudentsFromScores(){
 
 function renderStudentsOverview(filterText=''){
   const students = getAllStudentsFromScores().filter(n => n.toLowerCase().includes(filterText.toLowerCase()));
-  if(students.length === 0){
-    studentsListArea.innerHTML = '<p class="small">暂无学生成绩或进度记录。</p>';
-    return;
-  }
+  if(students.length === 0){ studentsListArea.innerHTML = '<p class="small">暂无学生成绩或进度记录。</p>'; return; }
   let html = `<table class="table"><thead><tr><th>学生</th><th>完成练习数</th><th>最新完成时间</th><th>最近练习</th><th>操作</th></tr></thead><tbody>`;
   students.forEach(name=>{
     const sList = scores.filter(s=> s.student === name);
     const cnt = sList.length;
-    const latest = sList.length ? sList.slice().sort((a,b)=> new Date(b.time)-new Date(a.time))[0].time : (progress[name] ? '未完成进度' : '—');
-    const lastExercise = sList.length ? sList.slice().sort((a,b)=> new Date(b.time)-new Date(a.time))[0].exercise : (progress[name] ? progress[name].levelName : '—');
+    const latest = sList.length ? sList.slice().sort((a,b)=> new Date(b.time)-new Date(a.time))[0].time : (progress[name]? '未完成进度':'—');
+    const lastExercise = sList.length ? sList.slice().sort((a,b)=> new Date(b.time)-new Date(a.time))[0].exercise : (progress[name]? progress[name].levelName:'—');
     html += `<tr>
-      <td>${name}</td>
-      <td>${cnt}</td>
-      <td>${latest || '—'}</td>
-      <td>${lastExercise}</td>
+      <td>${name}</td><td>${cnt}</td><td>${latest||'—'}</td><td>${lastExercise}</td>
       <td><button class="viewBtn" data-name="${name}">查看详情</button></td>
     </tr>`;
   });
   html += '</tbody></table>';
   studentsListArea.innerHTML = html;
-  Array.from(document.getElementsByClassName('viewBtn')).forEach(b=>{ b.onclick = ()=> openStudentDetail(b.dataset.name); });
+  Array.from(document.getElementsByClassName('viewBtn')).forEach(b=>{
+    b.onclick = ()=> openStudentDetail(b.dataset.name);
+  });
 }
 
-searchStudent.addEventListener('input', ()=> renderStudentsOverview(searchStudent.value.trim()));
+searchStudent.addEventListener('input', ()=> {
+  renderStudentsOverview(searchStudent.value.trim());
+});
 
+/* 学生详情 */
 function openStudentDetail(name){
   teacherOverview.classList.add('hidden');
   teacherStudentDetail.classList.remove('hidden');
@@ -276,41 +288,48 @@ function openStudentDetail(name){
 
 function renderStudentDetail(name){
   const sList = scores.filter(s=> s.student===name).slice().sort((a,b)=> new Date(b.time)-new Date(a.time));
-  if(sList.length===0){ studentScoresTable.innerHTML=`<p class="small">该学生尚无完成记录。</p>`; }
-  else{
+  if(sList.length===0){ studentScoresTable.innerHTML = `<p class="small">该学生尚无完成记录。</p>`; }
+  else {
     let html = `<table class="table"><thead><tr><th>练习</th><th>关卡</th><th>题型</th><th>得分</th><th>总分</th><th>时间</th></tr></thead><tbody>`;
-    sList.forEach(s=>{ html+=`<tr><td>${s.exercise}</td><td>${s.level}</td><td>${s.type}</td><td>${s.score}</td><td>${s.total}</td><td>${s.time}</td></tr>`; });
-    html += '</tbody></table>'; studentScoresTable.innerHTML=html;
+    sList.forEach(s=>{
+      html+=`<tr><td>${s.exercise}</td><td>${s.level}</td><td>${s.type}</td><td>${s.score}</td><td>${s.total}</td><td>${s.time}</td></tr>`;
+    });
+    html+='</tbody></table>';
+    studentScoresTable.innerHTML = html;
   }
-  const byLevel={};
-  sList.forEach(s=>{ if(!byLevel[s.level]) byLevel[s.level]=[]; byLevel[s.level].push(s); });
-  let progHtml='';
-  LEVELS.forEach(lvl=>{
-    const arr=byLevel[lvl.name]||[];
-    if(arr.length===0){ progHtml+=`<div><span class="level-badge">${lvl.name}</span> 未完成</div>`; }
+
+  const byLevel = {};
+  sList.forEach(s=> { if(!byLevel[s.level]) byLevel[s.level]=[]; byLevel[s.level].push(s); });
+  let progHtml = '';
+  LEVELS.forEach((lvl,idx)=>{
+    const arr = byLevel[lvl.name]||[];
+    if(arr.length===0) progHtml+=`<div><span class="level-badge">${lvl.name}</span> 未完成</div>`;
     else{
       const latest=arr.slice().sort((a,b)=> new Date(b.time)-new Date(a.time))[0];
       progHtml+=`<div><span class="level-badge">${lvl.name}</span> ${latest.score}/${latest.total} （最近：${latest.time}）</div>`;
     }
   });
-  if(progress[name]){ progHtml+=`<div style="margin-top:6px" class="small">本地未完成进度：${progress[name].levelName} (${progress[name].gameType})</div>`; }
-  studentProgressSummary.innerHTML=progHtml;
+  if(progress[name]) progHtml+=`<div style="margin-top:6px" class="small">本地未完成进度：${progress[name].levelName} (${progress[name].gameType})</div>`;
+  studentProgressSummary.innerHTML = progHtml;
 }
 
-/* 导出 CSV */
-exportAllCsvBtn.onclick = ()=>{ 
+/* CSV 导出 */
+exportAllCsvBtn.onclick = ()=>{
   if(scores.length===0){ alert('没有数据可导出'); return; }
   const header=['练习','学生','角色','关卡','题型','得分','总分','时间'];
-  const rows=scores.map(s=>[s.exercise,s.student,s.role,s.level,s.type,s.score,s.total,s.time]);
+  const rows = scores.map(s=>[s.exercise,s.student,s.role,s.level,s.type,s.score,s.total,s.time]);
   downloadCsv([header,...rows],'all_scores.csv');
 };
+
 exportOneCsvBtn.onclick = ()=>{
-  const name=detailStudentName.textContent;
-  const rows=scores.filter(s=>s.student===name).map(s=>[s.exercise,s.student,s.role,s.level,s.type,s.score,s.total,s.time]);
+  const name = detailStudentName.textContent;
+  const rows = scores.filter(s=> s.student===name).map(s=>[s.exercise,s.student,s.role,s.level,s.type,s.score,s.total,s.time]);
   if(rows.length===0){ alert('该学生暂无记录'); return; }
-  downloadCsv([['练习','学生','角色','关卡','题型','得分','总分','时间'],...rows],`${name}_scores.csv`);
+  const header=['练习','学生','角色','关卡','题型','得分','总分','时间'];
+  downloadCsv([header,...rows],`${name}_scores.csv`);
 };
-function downloadCsv(tableArray,filename){
+
+function downloadCsv(tableArray, filename){
   const csv=tableArray.map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
@@ -318,77 +337,196 @@ function downloadCsv(tableArray,filename){
   URL.revokeObjectURL(url);
 }
 
-/* 删除 / 清空 */
+/* 删除成绩 */
 deleteStudentScoresBtn.onclick = ()=>{
-  const name=detailStudentName.textContent;
+  const name = detailStudentName.textContent;
   if(!confirm(`确定删除 ${name} 的所有成绩记录吗？此操作不可恢复。`)) return;
-  scores=scores.filter(s=>s.student!==name);
-  localStorage.setItem('cf_scores_'+EXERCISE_NAME,JSON.stringify(scores));
+  scores = scores.filter(s=> s.student!==name);
+  localStorage.setItem('cf_scores',JSON.stringify(scores));
   renderStudentsOverview(searchStudent.value.trim());
   showTeacherOverview();
 };
+
+/* 清空所有成绩 */
 clearScoresBtn.onclick = ()=>{
   if(!confirm('确定清空所有成绩与进度吗？')) return;
   scores=[]; progress={};
-  localStorage.removeItem('cf_scores_'+EXERCISE_NAME);
-  localStorage.removeItem('cf_progress_'+EXERCISE_NAME);
+  localStorage.removeItem('cf_scores');
+  localStorage.removeItem('cf_progress');
   renderStudentsOverview();
 };
 
-/* 工具 */
-function showTeacherOverview(){ teacherOverview.classList.remove('hidden'); teacherStudentDetail.classList.add('hidden'); renderStudentsOverview(); }
+/* 工具函数 */
+function shuffle(arr){ return arr.sort(()=> Math.random()-0.5); }
+function randomFrom(arr){ return arr[Math.floor(Math.random()*arr*]()
+.length)]; }
 
-/* 游戏逻辑（示例：MC） */
-startGameBtn.onclick = ()=> startGame();
-retryBtn.onclick = ()=> startGame(currentSession.levelIndex, currentSession.gameType);
+/* 游戏开始 */
+startGameBtn.onclick = ()=>{
+  const lvlIdx = parseInt(levelSelectEl.value);
+  const level = LEVELS[lvlIdx];
+  const gameType = gameTypeEl.value;
+  if(!level){ alert('请选择关卡'); return; }
+  currentSession = { levelIndex:lvlIdx, levelName:level.name, gameType, score:0, total:level.words.length };
+  gameArea.innerHTML = '';
+  resultArea.classList.add('hidden');
+  if(gameType==='mc') renderMC(level.words);
+  else if(gameType==='typing') renderTyping(level.words);
+  else if(gameType==='listen') renderListen(level.words);
+  else if(gameType==='match') renderMatch(level.words);
+  else if(gameType==='pair') renderPair(level.words);
+};
 
-function startGame(levelIndex, gameType){
-  levelIndex = levelIndex !== undefined ? levelIndex : parseInt(levelSelectEl.value);
-  gameType = gameType || gameTypeEl.value;
-  const level = LEVELS[levelIndex];
-  currentSession = { levelIndex, levelName: level.name, gameType };
-  gameArea.innerHTML = `<h3>${level.name} — ${gameType}</h3>`;
-  let score=0;
-  if(gameType==='mc'){
-    const word=level.words[Math.floor(Math.random()*level.words.length)];
-    const opts=[word.en];
-    while(opts.length<4){
-      const r=level.words[Math.floor(Math.random()*level.words.length)].en;
-      if(!opts.includes(r)) opts.push(r);
-    }
-    opts.sort(()=>Math.random()-0.5);
-    gameArea.innerHTML+=`<div class="word-big">${word.ch}</div><div class="options">${opts.map(o=>`<div class="opt">${o}</div>`).join('')}</div>`;
-    Array.from(gameArea.getElementsByClassName('opt')).forEach(el=>{
-      el.onclick = ()=>{
-        if(el.textContent===word.en){ el.classList.add('correct'); correctSound.play(); score=1; }
-        else{ el.classList.add('wrong'); wrongSound.play(); }
-        setTimeout(()=>{ saveScore(score,1); showResult(score,1); },700);
-      };
-    });
-  }
-  // Typing, Listen, Match, Pair 等题型逻辑可依此拓展
+/* 重玩 */
+retryBtn.onclick = ()=> startGameBtn.click();
+
+/* 简单看词选义 */
+function renderMC(words){
+  const w = shuffle([...words])[0];
+  const options = shuffle([w,...words.filter(x=>x!==w)].slice(0,4));
+  let html = `<div class="word-big">${w.ch}</div><div class="options">`;
+  options.forEach(o=>{
+    html+=`<div class="opt">${o.en}</div>`;
+  });
+  html+='</div>';
+  gameArea.innerHTML = html;
+  Array.from(document.getElementsByClassName('opt')).forEach(o=>{
+    o.onclick = ()=>{
+      const isCorrect = o.textContent===w.en;
+      o.classList.add(isCorrect?'correct':'wrong');
+      if(isCorrect){ currentSession.score++; correctSound.play(); }
+      else wrongSound.play();
+      saveProgress();
+      setTimeout(()=> showSessionResult(),800);
+    };
+  });
 }
 
-function showResult(score,total){
-  sessionScoreEl.textContent = `${score}/${total}`;
+/* 拼写/输入 */
+function renderTyping(words){
+  const w = shuffle([...words])[0];
+  let html = `<div class="word-big">${w.ch}</div>
+    <input id="typingInput" placeholder="输入拼音或英文">
+    <button id="submitTyping">提交</button>`;
+  gameArea.innerHTML = html;
+  document.getElementById('submitTyping').onclick = ()=>{
+    const val = document.getElementById('typingInput').value.trim().toLowerCase();
+    const isCorrect = val===w.pin.toLowerCase()||val===w.en.toLowerCase();
+    if(isCorrect){ currentSession.score++; correctSound.play(); }
+    else wrongSound.play();
+    saveProgress();
+    showSessionResult();
+  };
+}
+
+/* 听写 */
+function renderListen(words){
+  const w = shuffle([...words])[0];
+  let html = `<button id="playWord">播放字</button>
+    <input id="listenInput" placeholder="听写汉字">
+    <button id="submitListen">提交</button>`;
+  gameArea.innerHTML = html;
+  document.getElementById('playWord').onclick = ()=> { const audio=new Audio(w.ch+'.mp3'); audio.play(); };
+  document.getElementById('submitListen').onclick = ()=>{
+    const val = document.getElementById('listenInput').value.trim();
+    const isCorrect = val===w.ch;
+    if(isCorrect){ currentSession.score++; correctSound.play(); }
+    else wrongSound.play();
+    saveProgress();
+    showSessionResult();
+  };
+}
+
+/* 配对 */
+function renderMatch(words){
+  const left = shuffle([...words]);
+  const right = shuffle([...words]);
+  let html = `<div class="row"><div style="flex:1">`;
+  left.forEach((w,i)=> html+=`<div class="opt" data-ch="${w.ch}" data-en="${w.en}">${w.ch}</div>`);
+  html+=`</div><div style="flex:1">`;
+  right.forEach((w,i)=> html+=`<div class="opt" data-ch="${w.ch}" data-en="${w.en}">${w.en}</div>`);
+  html+='</div></div>';
+  gameArea.innerHTML = html;
+  let first=null;
+  Array.from(document.getElementsByClassName('opt')).forEach(o=>{
+    o.onclick = ()=>{
+      o.classList.add('selected');
+      if(!first){ first=o; return; }
+      const isCorrect = first.dataset.ch===o.dataset.ch;
+      if(isCorrect){
+        currentSession.score++; correctSound.play();
+        first.classList.add('correct'); o.classList.add('correct');
+      } else wrongSound.play();
+      first.classList.remove('selected'); first=null;
+      saveProgress();
+      setTimeout(()=> showSessionResult(),800);
+    };
+  });
+}
+
+/* 连连看 */
+function renderPair(words){
+  const pairs = shuffle([...words]);
+  let html='<div class="row">';
+  pairs.forEach(p=> html+=`<div class="opt" data-val="${p.ch}">${p.ch}</div>`);
+  html+='</div><div class="row">';
+  pairs.forEach(p=> html+=`<div class="opt" data-val="${p.ch}">${p.en}</div>`);
+  html+='</div>';
+  gameArea.innerHTML = html;
+  let first=null;
+  Array.from(document.getElementsByClassName('opt')).forEach(o=>{
+    o.onclick = ()=>{
+      o.classList.add('selected');
+      if(!first){ first=o; return; }
+      const isCorrect = first.dataset.val===o.dataset.val;
+      if(isCorrect){ currentSession.score++; correctSound.play(); first.classList.add('correct'); o.classList.add('correct'); }
+      else wrongSound.play();
+      first.classList.remove('selected'); first=null;
+      saveProgress();
+      setTimeout(()=> showSessionResult(),800);
+    };
+  });
+}
+
+/* 显示结果 */
+function showSessionResult(){
+  gameArea.innerHTML='';
   resultArea.classList.remove('hidden');
+  sessionScoreEl.textContent = `${currentSession.score} / ${currentSession.total}`;
+  saveScore();
+  delete progress[currentUser.name]; localStorage.setItem('cf_progress',JSON.stringify(progress));
 }
 
-function saveScore(score,total){
-  const data={ student: currentUser.name, role: currentUser.role, exercise: EXERCISE_NAME, level: currentSession.levelName, type: currentSession.gameType, score, total, time:new Date().toLocaleString() };
-  scores.push(data);
-  localStorage.setItem('cf_scores_'+EXERCISE_NAME, JSON.stringify(scores));
-  delete progress[currentUser.name]; // 已完成进度
-  localStorage.setItem('cf_progress_'+EXERCISE_NAME, JSON.stringify(progress));
-}
-
-/* 保存未完成进度 */
-window.addEventListener('beforeunload', ()=>{
-  if(currentUser && currentUser.role==='student' && currentSession){
-    progress[currentUser.name]=currentSession;
-    localStorage.setItem('cf_progress_'+EXERCISE_NAME, JSON.stringify(progress));
+/* 保存进度 */
+function saveProgress(){
+  if(currentUser.role==='student'){
+    progress[currentUser.name]={
+      levelIndex:currentSession.levelIndex,
+      levelName:currentSession.levelName,
+      gameType:currentSession.gameType
+    };
+    localStorage.setItem('cf_progress',JSON.stringify(progress));
   }
-});
+}
+
+/* 保存成绩 */
+function saveScore(){
+  if(currentUser.role==='student'){
+    const now = new Date().toLocaleString();
+    scores.push({
+      exercise:EXERCISE_NAME,
+      student:currentUser.name,
+      role:currentUser.role,
+      level:currentSession.levelName,
+      type:currentSession.gameType,
+      score:currentSession.score,
+      total:currentSession.total,
+      time:now
+    });
+    localStorage.setItem('cf_scores',JSON.stringify(scores));
+  }
+}
+
 </script>
 </body>
 </html>
